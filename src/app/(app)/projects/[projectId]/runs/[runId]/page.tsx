@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import type { StatusValue } from "@/components/ui/StatusBadge";
+import { CaseRunStatusSelect } from "../CaseRunStatusSelect";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import {
   CheckCircle2,
@@ -149,6 +149,8 @@ export default async function RunDetailPage({
                 <CaseRunRow
                   key={cr.id}
                   caseRun={cr}
+                  projectId={projectId}
+                  runId={runId}
                   testCaseTitle={testCaseMap[cr.test_case_id] ?? "Unknown test case"}
                 />
               ))}
@@ -187,6 +189,8 @@ function StatCard({
 
 function CaseRunRow({
   caseRun,
+  projectId,
+  runId,
   testCaseTitle,
 }: {
   caseRun: {
@@ -199,6 +203,8 @@ function CaseRunRow({
     console_log: string | null;
     step_results: unknown;
   };
+  projectId: string;
+  runId: string;
   testCaseTitle: string;
 }) {
   const isPassed = caseRun.status === "passed";
@@ -220,7 +226,12 @@ function CaseRunRow({
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs tabular-nums text-(--text-muted)">
-          <StatusBadge status={caseRun.status as StatusValue} size="sm" />
+          <CaseRunStatusSelect
+            caseRunId={caseRun.id}
+            runId={runId}
+            projectId={projectId}
+            currentStatus={caseRun.status}
+          />
           {caseRun.duration_ms != null && (
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" aria-hidden="true" />
