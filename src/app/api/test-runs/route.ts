@@ -39,24 +39,26 @@ export async function POST(request: Request) {
   const { project_id, name, environment, base_url_override, test_case_ids } =
     result.data;
 
-  // Count cases to run
-  let totalCases = 0;
+  // Resolve test cases to run
+  let testCases: { id: string }[] = [];
   if (test_case_ids && test_case_ids.length > 0) {
-    totalCases = test_case_ids.length;
+    const { data } = await supabase
+      .from("test_cases")
+      .select("id")
+      .in("id", test_case_ids);
+    testCases = data ?? [];
   } else {
-    // Resolve feature IDs first, then count test cases
     const { data: features } = await supabase
       .from("features")
       .select("id")
       .eq("project_id", project_id);
     const featureIds = (features ?? []).map((f) => f.id);
     if (featureIds.length > 0) {
-      const { count } = await supabase
+      const { data } = await supabase
         .from("test_cases")
-        .select("id", { count: "exact" })
-        .eq("status", "active")
+        .select("id")
         .in("feature_id", featureIds);
-      totalCases = count ?? 0;
+      testCases = data ?? [];
     }
   }
 
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
       triggered_by: user.id,
       environment,
       base_url_override: base_url_override ?? null,
-      total_cases: totalCases,
+      total_cases: testCases.length,
       passed: 0,
       failed: 0,
       skipped: 0,
@@ -80,8 +82,50 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !run) {
+    return NextResponse.json(
+      { error: error?.message ?? "Failed to create run" },
+      { status: 500 }
+    );
+  }
+
+  // Create test_case_runs rows so the detail page can display them
+  if (testCases.length > 0) {
+    const { error: caseRunsError } = await supabase
+      .from("test_case_runs")
+      .insert(
+        testCases.map((tc) => ({
+          test_run_id: run.id,
+          test_case_id: tc.id,
+          status: "pending" as const,
+        }))
+      );
+
+    if (caseRunsError) {
+      return NextResponse.json(
+        { error: "Failed to create case runs", details: caseRunsError.message },
+        { status: 500 }
+      );
+    }
+
+    // Mark test cases as pending for this run so the feature page reflects status
+    const { error: caseUpdateError } = await supabase
+      .from("test_cases")
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_run_status: "pending",
+      })
+      .in(
+        "id",
+        testCases.map((tc) => tc.id)
+      );
+
+    if (caseUpdateError) {
+      return NextResponse.json(
+        { error: "Failed to update test case statuses", details: caseUpdateError.message },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ run }, { status: 201 });

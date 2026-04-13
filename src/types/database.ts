@@ -293,6 +293,22 @@ export type TestRunInsert = {
   metadata?: Json;
 };
 
+export type TestCaseRunInsert = {
+  test_run_id: string;
+  test_case_id: string;
+  status?: CaseRunStatus;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+  error_message?: string | null;
+  error_stack?: string | null;
+  step_results?: Json | null;
+  screenshot_urls?: string[];
+  video_url?: string | null;
+  console_log?: string | null;
+  network_log?: Json | null;
+};
+
 // ── Database type (Supabase client generic) ───────────────────────
 export type Database = {
   __InternalSupabase?: {
@@ -356,7 +372,7 @@ export type Database = {
       };
       test_case_runs: {
         Row: TestCaseRun;
-        Insert: Omit<TestCaseRun, "id" | "created_at">;
+        Insert: TestCaseRunInsert;
         Update: Partial<Omit<TestCaseRun, "id" | "created_at">>;
         Relationships: [];
       };
