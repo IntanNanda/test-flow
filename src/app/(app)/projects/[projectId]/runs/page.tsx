@@ -14,6 +14,7 @@ import {
   Calendar,
   User,
 } from "lucide-react";
+import { TriggerRunButton } from "./TriggerRunButton";
 import { formatDuration, formatRelativeTime } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -192,13 +193,4 @@ export default async function RunsPage({
   );
 }
 
-function TriggerRunButton({ projectId }: { projectId: string }) {
-  return (
-    <form action={`/api/test-runs`} method="POST">
-      <input type="hidden" name="projectId" value={projectId} />
-      <Link href={`/projects/${projectId}/runs/trigger`}>
-        <Button leftIcon={<Play className="h-4 w-4" />}>Trigger run</Button>
-      </Link>
-    </form>
-  );
-}
+
