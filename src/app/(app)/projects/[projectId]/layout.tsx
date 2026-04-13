@@ -1,15 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ProjectNavLink } from "@/components/layout/ProjectNavLink";
-import { FolderOpen, Play, BarChart2, Settings, Layers } from "lucide-react";
-
-const navItems = [
-  { href: "", label: "Features", icon: Layers, exact: true },
-  { href: "/runs", label: "Runs", icon: Play },
-  { href: "/performance", label: "Performance", icon: BarChart2 },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+import { ProjectSubNav } from "@/components/layout/ProjectSubNav";
+import { FolderOpen } from "lucide-react";
 
 export default async function ProjectLayout({
   children,
@@ -50,20 +43,7 @@ export default async function ProjectLayout({
           </div>
 
           {/* Sub-navigation */}
-          <nav aria-label="Project navigation" className="-mb-px flex">
-            {navItems.map(({ href, label, icon: Icon, exact }) => {
-              const fullHref = `/projects/${projectId}${href}`;
-              return (
-                <ProjectNavLink
-                  key={label}
-                  href={fullHref}
-                  label={label}
-                  icon={Icon}
-                  exact={exact}
-                />
-              );
-            })}
-          </nav>
+          <ProjectSubNav projectId={projectId} />
         </div>
       </div>
 
