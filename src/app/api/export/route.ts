@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -44,25 +45,40 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (format === "csv") {
-    const rows = (testCases ?? []).map((tc) => ({
-      id: tc.id,
-      title: tc.title,
-      description: tc.description ?? "",
-      scenario_type: tc.scenario_type,
-      test_type: tc.test_type,
-      priority: tc.priority,
-      status: tc.status,
-      preconditions: tc.preconditions ?? "",
-      tags: tc.tags.join(", "),
-      step_count: 0,
-    }));
+  const rows = (testCases ?? []).map((tc) => ({
+    id: tc.id,
+    title: tc.title,
+    description: tc.description ?? "",
+    scenario_type: tc.scenario_type,
+    test_type: tc.test_type,
+    priority: tc.priority,
+    status: tc.status,
+    preconditions: tc.preconditions ?? "",
+    tags: tc.tags.join(", "),
+  }));
 
+  if (format === "csv") {
     const csv = Papa.unparse(rows);
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv",
         "Content-Disposition": `attachment; filename="testflow-export-${Date.now()}.csv"`,
+      },
+    });
+  }
+
+  if (format === "excel") {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
+    const raw = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as unknown as ArrayBuffer;
+    const blob = new Blob([raw], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    return new NextResponse(blob, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="testflow-export-${Date.now()}.xlsx"`,
       },
     });
   }

@@ -6,7 +6,8 @@ import { PriorityBadge } from "@/components/ui/PriorityBadge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { StepBuilder } from "./StepBuilder";
 import { LighthouseConfigForm } from "./LighthouseConfigForm";
-import { ChevronRight, Calendar } from "lucide-react";
+import { ApiConfigForm, type ApiTestConfig } from "./ApiConfigForm";
+import { ChevronRight, Calendar, ArrowLeft } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -39,7 +40,6 @@ export default async function TestCasePage({
 }) {
   const { projectId, featureId, testCaseId } = await params;
   const { tab } = await searchParams;
-  const activeTab = tab ?? "steps";
 
   const supabase = await createClient();
 
@@ -49,6 +49,7 @@ export default async function TestCasePage({
     { data: project },
     { data: steps },
     { data: lhConfig },
+    { data: apiConfig },
   ] = await Promise.all([
     supabase.from("test_cases").select("*").eq("id", testCaseId).single(),
     supabase.from("features").select("name").eq("id", featureId).single(),
@@ -63,17 +64,27 @@ export default async function TestCasePage({
       .select("*")
       .eq("test_case_id", testCaseId)
       .maybeSingle(),
+    supabase
+      .from("api_test_configs")
+      .select("*")
+      .eq("test_case_id", testCaseId)
+      .maybeSingle(),
   ]);
 
   if (!tc) notFound();
 
   const scenario = SCENARIO_LABELS[tc.scenario_type];
   const isLighthouse = tc.test_type === "frontend_performance";
+  const isApi = tc.test_type === "api_performance";
 
   const tabs = [
-    { id: "steps", label: "Steps" },
+    ...(!isApi ? [{ id: "steps", label: "Steps" }] : []),
     ...(isLighthouse ? [{ id: "configuration", label: "Configuration" }] : []),
+    ...(isApi ? [{ id: "configuration", label: "Configuration" }] : []),
   ];
+
+  const defaultTab = isApi ? "configuration" : "steps";
+  const activeTab = tab ?? defaultTab;
 
   return (
     <div className="mx-auto max-w-[1400px] p-6">
@@ -91,16 +102,30 @@ export default async function TestCasePage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Main */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-semibold text-[var(--text-primary)]">{tc.title}</h1>
-              {tc.description && (
-                <p className="mt-2 text-sm text-[var(--text-secondary)]">{tc.description}</p>
-              )}
+          <div className="rounded-2xl border border-[#E2E8F0] bg-white px-6 py-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <Link
+                href={`/projects/${projectId}/features/${featureId}`}
+                className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#E2E8F0] bg-white text-[#6B7A99] transition-colors hover:border-[#2B6CFF] hover:text-[#2B6CFF]"
+                aria-label="Back to feature"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h1 className="text-lg font-semibold text-[#0A1B3D]">{tc.title}</h1>
+                    {tc.description && (
+                      <p className="mt-1 text-sm text-[#6B7A99]">{tc.description}</p>
+                    )}
+                  </div>
+                  <StatusBadge
+                    status={(tc.last_run_status as "passed" | "failed" | "pending") ?? "pending"}
+                    size="sm"
+                  />
+                </div>
+              </div>
             </div>
-            <StatusBadge
-              status={(tc.last_run_status as "passed" | "failed" | "pending") ?? "pending"}
-            />
           </div>
 
           {/* Tabs */}
@@ -139,6 +164,15 @@ export default async function TestCasePage({
               featureId={featureId}
               projectId={projectId}
               config={lhConfig}
+            />
+          )}
+
+          {activeTab === "configuration" && isApi && (
+            <ApiConfigForm
+              testCaseId={testCaseId}
+              featureId={featureId}
+              projectId={projectId}
+              config={apiConfig as ApiTestConfig | null}
             />
           )}
         </div>

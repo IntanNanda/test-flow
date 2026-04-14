@@ -75,6 +75,45 @@ export async function createTestCase(
   redirect(`/projects/${projectId}/features/${featureId}/test-cases/${tc.id}`);
 }
 
+export async function updateTestCase(
+  testCaseId: string,
+  featureId: string,
+  projectId: string,
+  prevState: TestCaseActionState,
+  formData: FormData
+): Promise<TestCaseActionState> {
+  const supabase = await createClient();
+
+  const raw = {
+    title: formData.get("title") as string,
+    scenario_type: formData.get("scenario_type") as string,
+    test_type: formData.get("test_type") as string,
+    priority: formData.get("priority") as string,
+  };
+
+  const schema = z.object({
+    title: z.string().min(1, "Title is required").max(200),
+    scenario_type: z.enum(["positive", "negative", "edge"]),
+    test_type: z.enum(["functional", "api_performance", "frontend_performance"]),
+    priority: z.enum(["critical", "high", "medium", "low"]),
+  });
+
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    return { errors: result.error.flatten().fieldErrors };
+  }
+
+  const { error } = await supabase
+    .from("test_cases")
+    .update(result.data)
+    .eq("id", testCaseId);
+
+  if (error) return { message: error.message };
+
+  revalidatePath(`/projects/${projectId}/features/${featureId}`);
+  return { message: "ok" };
+}
+
 export async function deleteTestCase(
   testCaseId: string,
   featureId: string,

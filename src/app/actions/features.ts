@@ -16,6 +16,58 @@ export type FeatureActionState = {
   message?: string;
 };
 
+export async function updateFeature(
+  featureId: string,
+  projectId: string,
+  prevState: FeatureActionState,
+  formData: FormData
+): Promise<FeatureActionState> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { message: "Not authenticated" };
+
+  const raw = {
+    name: formData.get("name") as string,
+    description: (formData.get("description") as string) || undefined,
+  };
+
+  const result = featureSchema.safeParse(raw);
+  if (!result.success) {
+    return { errors: result.error.flatten().fieldErrors };
+  }
+
+  const { error } = await supabase
+    .from("features")
+    .update({
+      name: result.data.name,
+      description: result.data.description ?? null,
+    })
+    .eq("id", featureId);
+
+  if (error) return { message: error.message };
+
+  revalidatePath(`/projects/${projectId}/features/${featureId}`);
+  return { message: "ok" };
+}
+
+export async function deleteFeature(
+  featureId: string,
+  projectId: string
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("features")
+    .delete()
+    .eq("id", featureId)
+    .eq("project_id", projectId);
+  if (error) return { error: error.message };
+  revalidatePath(`/projects/${projectId}`);
+  return {};
+}
+
 export async function createFeature(
   projectId: string,
   prevState: FeatureActionState,

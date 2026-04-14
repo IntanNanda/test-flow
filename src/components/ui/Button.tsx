@@ -53,7 +53,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={isDisabled}
         aria-disabled={isDisabled}
         className={cn(
-          "inline-flex min-w-[44px] cursor-pointer items-center justify-center rounded font-medium transition-colors",
+          "inline-flex min-w-[44px] cursor-pointer items-center justify-center rounded-lg font-medium transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
           "disabled:cursor-not-allowed disabled:opacity-50",
           VARIANT_CLASSES[variant],
