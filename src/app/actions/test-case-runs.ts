@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { RunStatus } from "@/types/database";
 
 const statusSchema = z.enum([
   "pending",
@@ -85,7 +86,7 @@ export async function updateCaseRunStatus(
   const { error: runUpdateError } = await supabase
     .from("test_runs")
     .update({
-      status: runStatus as any,
+      status: runStatus as RunStatus,
       passed,
       failed,
       skipped,

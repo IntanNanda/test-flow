@@ -62,6 +62,50 @@ export type PerformanceHistory = {
   created_at: string;
 };
 
+export type LighthouseConfig = {
+  id: string;
+  test_case_id: string;
+  url: string;
+  device: "desktop" | "mobile";
+  run_count: number;
+  throttling: "none" | "simulated" | "applied";
+  threshold_performance: number;
+  threshold_accessibility: number;
+  threshold_best_practices: number;
+  threshold_seo: number;
+  regression_delta: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LighthouseResult = {
+  id: string;
+  case_run_id: string;
+  run_number: number;
+  is_median: boolean;
+  performance_score: number | null;
+  accessibility_score: number | null;
+  best_practices_score: number | null;
+  seo_score: number | null;
+  lcp_ms: number | null;
+  cls: number | null;
+  fid_ms: number | null;
+  ttfb_ms: number | null;
+  fcp_ms: number | null;
+  tbt_ms: number | null;
+  si_ms: number | null;
+  chrome_version: string | null;
+  lighthouse_version: string | null;
+  throttling_profile: string | null;
+  report_url: string | null;
+  raw_json_url: string | null;
+  regression_detected: boolean;
+  previous_score: number | null;
+  created_at: string;
+};
+
+export type LighthouseResultInsert = Omit<LighthouseResult, "id" | "created_at">;
+
 export type TeamInvite = {
   id: string;
   team_id: string;
@@ -386,6 +430,29 @@ export type Database = {
         Row: PerformanceHistory;
         Insert: Omit<PerformanceHistory, "id" | "created_at">;
         Update: Partial<Omit<PerformanceHistory, "id" | "created_at">>;
+        Relationships: [];
+      };
+      lighthouse_configs: {
+        Row: LighthouseConfig;
+        Insert: {
+          test_case_id: string;
+          url: string;
+          device?: "desktop" | "mobile";
+          run_count?: number;
+          throttling?: "none" | "simulated" | "applied";
+          threshold_performance?: number;
+          threshold_accessibility?: number;
+          threshold_best_practices?: number;
+          threshold_seo?: number;
+          regression_delta?: number;
+        };
+        Update: Partial<Omit<LighthouseConfig, "id" | "created_at" | "updated_at">>;
+        Relationships: [];
+      };
+      lighthouse_results: {
+        Row: LighthouseResult;
+        Insert: Omit<LighthouseResult, "id" | "created_at">;
+        Update: Partial<Omit<LighthouseResult, "id" | "created_at">>;
         Relationships: [];
       };
       run_summaries: {

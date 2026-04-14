@@ -5,7 +5,8 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PriorityBadge } from "@/components/ui/PriorityBadge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { StepBuilder } from "./StepBuilder";
-import { ChevronRight, Calendar, User } from "lucide-react";
+import { LighthouseConfigForm } from "./LighthouseConfigForm";
+import { ChevronRight, Calendar } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -31,27 +32,48 @@ const SCENARIO_LABELS: Record<string, { label: string; class: string }> = {
 
 export default async function TestCasePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string; featureId: string; testCaseId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { projectId, featureId, testCaseId } = await params;
+  const { tab } = await searchParams;
+  const activeTab = tab ?? "steps";
+
   const supabase = await createClient();
 
-  const [{ data: tc }, { data: feature }, { data: project }, { data: steps }] =
-    await Promise.all([
-      supabase.from("test_cases").select("*").eq("id", testCaseId).single(),
-      supabase.from("features").select("name").eq("id", featureId).single(),
-      supabase.from("projects").select("name").eq("id", projectId).single(),
-      supabase
-        .from("test_steps")
-        .select("*")
-        .eq("test_case_id", testCaseId)
-        .order("step_order", { ascending: true }),
-    ]);
+  const [
+    { data: tc },
+    { data: feature },
+    { data: project },
+    { data: steps },
+    { data: lhConfig },
+  ] = await Promise.all([
+    supabase.from("test_cases").select("*").eq("id", testCaseId).single(),
+    supabase.from("features").select("name").eq("id", featureId).single(),
+    supabase.from("projects").select("name").eq("id", projectId).single(),
+    supabase
+      .from("test_steps")
+      .select("*")
+      .eq("test_case_id", testCaseId)
+      .order("step_order", { ascending: true }),
+    supabase
+      .from("lighthouse_configs")
+      .select("*")
+      .eq("test_case_id", testCaseId)
+      .maybeSingle(),
+  ]);
 
   if (!tc) notFound();
 
   const scenario = SCENARIO_LABELS[tc.scenario_type];
+  const isLighthouse = tc.test_type === "frontend_performance";
+
+  const tabs = [
+    { id: "steps", label: "Steps" },
+    ...(isLighthouse ? [{ id: "configuration", label: "Configuration" }] : []),
+  ];
 
   return (
     <div className="mx-auto max-w-[1400px] p-6">
@@ -67,7 +89,7 @@ export default async function TestCasePage({
       </nav>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main — steps */}
+        {/* Main */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -81,13 +103,44 @@ export default async function TestCasePage({
             />
           </div>
 
-          {/* Steps */}
-          <StepBuilder
-            testCaseId={testCaseId}
-            featureId={featureId}
-            projectId={projectId}
-            initialSteps={steps ?? []}
-          />
+          {/* Tabs */}
+          {tabs.length > 1 && (
+            <div className="border-b border-[var(--border)]">
+              <nav aria-label="Tabs" className="flex gap-4">
+                {tabs.map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/projects/${projectId}/features/${featureId}/test-cases/${testCaseId}?tab=${t.id}`}
+                    className={`border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
+                      activeTab === t.id
+                        ? "border-[#1E40AF] text-[#1E40AF]"
+                        : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    }`}
+                  >
+                    {t.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
+          )}
+
+          {activeTab === "steps" && (
+            <StepBuilder
+              testCaseId={testCaseId}
+              featureId={featureId}
+              projectId={projectId}
+              initialSteps={steps ?? []}
+            />
+          )}
+
+          {activeTab === "configuration" && isLighthouse && (
+            <LighthouseConfigForm
+              testCaseId={testCaseId}
+              featureId={featureId}
+              projectId={projectId}
+              config={lhConfig}
+            />
+          )}
         </div>
 
         {/* Sidebar — metadata */}

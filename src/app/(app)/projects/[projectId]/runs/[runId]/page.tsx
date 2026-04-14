@@ -13,8 +13,10 @@ import {
   AlertTriangle,
   Image as ImageIcon,
   Terminal,
+  FileJson,
 } from "lucide-react";
 import { formatDuration, formatRelativeTime } from "@/lib/utils";
+import type { LighthouseResult } from "@/types/database";
 
 export async function generateMetadata({
   params,
@@ -59,13 +61,29 @@ export default async function RunDetailPage({
   const { data: testCases } = testCaseIds.length
     ? await supabase
         .from("test_cases")
-        .select("id, title")
+        .select("id, title, test_type")
         .in("id", testCaseIds)
     : { data: [] };
 
   const testCaseMap = Object.fromEntries(
-    (testCases ?? []).map((tc) => [tc.id, tc.title])
+    (testCases ?? []).map((tc) => [tc.id, { title: tc.title, test_type: tc.test_type }])
   );
+
+  // Fetch lighthouse results for all case runs
+  const caseRunIds = caseRuns?.map((cr) => cr.id) ?? [];
+  const { data: lhResults } = caseRunIds.length
+    ? await supabase
+        .from("lighthouse_results")
+        .select("*")
+        .in("case_run_id", caseRunIds)
+    : { data: [] };
+
+  const lhMap = new Map<string, LighthouseResult[]>();
+  for (const r of lhResults ?? []) {
+    const list = lhMap.get(r.case_run_id) ?? [];
+    list.push(r);
+    lhMap.set(r.case_run_id, list);
+  }
 
   const passRate =
     run.total_cases > 0
@@ -151,7 +169,9 @@ export default async function RunDetailPage({
                   caseRun={cr}
                   projectId={projectId}
                   runId={runId}
-                  testCaseTitle={testCaseMap[cr.test_case_id] ?? "Unknown test case"}
+                  testCaseTitle={testCaseMap[cr.test_case_id]?.title ?? "Unknown test case"}
+                  testType={testCaseMap[cr.test_case_id]?.test_type ?? "functional"}
+                  lighthouseResults={lhMap.get(cr.id) ?? []}
                 />
               ))}
             </div>
@@ -187,11 +207,20 @@ function StatCard({
   );
 }
 
+function scoreColor(score: number | null) {
+  if (score == null) return "text-(--text-muted)";
+  if (score >= 90) return "text-[#15803D]";
+  if (score >= 50) return "text-[#B45309]";
+  return "text-[#B91C1C]";
+}
+
 function CaseRunRow({
   caseRun,
   projectId,
   runId,
   testCaseTitle,
+  testType,
+  lighthouseResults,
 }: {
   caseRun: {
     id: string;
@@ -206,9 +235,24 @@ function CaseRunRow({
   projectId: string;
   runId: string;
   testCaseTitle: string;
+  testType: string;
+  lighthouseResults: LighthouseResult[];
 }) {
   const isPassed = caseRun.status === "passed";
   const isFailed = caseRun.status === "failed" || caseRun.status === "error";
+
+  const stepResults = Array.isArray(caseRun.step_results)
+    ? (caseRun.step_results as Array<{
+        step_order: number;
+        action: string;
+        status: string;
+        duration_ms: number;
+        screenshot_url?: string;
+        error?: string;
+      }>)
+    : [];
+
+  const medianLh = lighthouseResults.find((r) => r.is_median) ?? lighthouseResults[0];
 
   return (
     <details className="group py-3">
@@ -248,7 +292,7 @@ function CaseRunRow({
         </div>
       </summary>
 
-      <div className="mt-3 space-y-3 pl-7">
+      <div className="mt-3 space-y-4 pl-7">
         {caseRun.error_message && (
           <div className="rounded-md border border-fail-bg bg-[#FEF2F2] p-3 dark:border-fail-text/40 dark:bg-fail-text/10">
             <p className="mb-1 text-xs font-semibold text-[#B91C1C]">Error</p>
@@ -265,6 +309,91 @@ function CaseRunRow({
                 </pre>
               </details>
             )}
+          </div>
+        )}
+
+        {/* Lighthouse results */}
+        {testType === "frontend_performance" && medianLh && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-(--text-secondary)">Lighthouse scores</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ScoreCard label="Performance" score={medianLh.performance_score} />
+              <ScoreCard label="Accessibility" score={medianLh.accessibility_score} />
+              <ScoreCard label="Best Practices" score={medianLh.best_practices_score} />
+              <ScoreCard label="SEO" score={medianLh.seo_score} />
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead>
+                  <tr className="text-left text-(--text-muted)">
+                    <th className="py-1 pr-3 font-medium">Metric</th>
+                    <th className="py-1 pr-3 font-medium">Value</th>
+                  </tr>
+                </thead>
+                <tbody className="text-(--text-primary)">
+                  <MetricRow label="LCP" value={medianLh.lcp_ms != null ? `${medianLh.lcp_ms.toFixed(0)} ms` : "—"} />
+                  <MetricRow label="CLS" value={medianLh.cls != null ? medianLh.cls.toFixed(3) : "—"} />
+                  <MetricRow label="FCP" value={medianLh.fcp_ms != null ? `${medianLh.fcp_ms.toFixed(0)} ms` : "—"} />
+                  <MetricRow label="TBT" value={medianLh.tbt_ms != null ? `${medianLh.tbt_ms.toFixed(0)} ms` : "—"} />
+                  <MetricRow label="SI" value={medianLh.si_ms != null ? `${medianLh.si_ms.toFixed(0)} ms` : "—"} />
+                </tbody>
+              </table>
+            </div>
+
+            {medianLh.raw_json_url && (
+              <a
+                href={medianLh.raw_json_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-[#1E40AF] hover:underline"
+              >
+                <FileJson className="h-3.5 w-3.5" aria-hidden="true" />
+                View raw JSON report
+              </a>
+            )}
+          </div>
+        )}
+
+        {/* Step results */}
+        {testType === "functional" && stepResults.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-(--text-secondary)">Step results</p>
+            <div className="space-y-1">
+              {stepResults.map((step) => (
+                <div
+                  key={step.step_order}
+                  className="flex items-center justify-between rounded border border-(--border) bg-(--surface) px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#DBEAFE] text-xs font-semibold text-[#1E40AF]">
+                      {step.step_order}
+                    </span>
+                    <span className="text-xs text-(--text-primary)">{step.action}</span>
+                    {step.status === "failed" ? (
+                      <XCircle className="h-3.5 w-3.5 text-[#B91C1C]" aria-hidden="true" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-[#15803D]" aria-hidden="true" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {step.screenshot_url && (
+                      <a
+                        href={step.screenshot_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-[#1E40AF] hover:underline"
+                      >
+                        Screenshot
+                      </a>
+                    )}
+                    <span className="text-xs tabular-nums text-(--text-muted)">
+                      {formatDuration(step.duration_ms)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -303,12 +432,32 @@ function CaseRunRow({
           </div>
         )}
 
-        {isPassed && !caseRun.error_message && caseRun.screenshot_urls.length === 0 && !caseRun.console_log && (
+        {isPassed && !caseRun.error_message && caseRun.screenshot_urls.length === 0 && !caseRun.console_log && stepResults.length === 0 && lighthouseResults.length === 0 && (
           <p className="text-xs text-(--text-muted)">
             Test passed with no captured artifacts.
           </p>
         )}
       </div>
     </details>
+  );
+}
+
+function ScoreCard({ label, score }: { label: string; score: number | null }) {
+  return (
+    <div className="rounded border border-(--border) bg-(--surface) p-3">
+      <p className="text-xs text-(--text-muted)">{label}</p>
+      <p className={`text-lg font-semibold tabular-nums ${scoreColor(score)}`}>
+        {score ?? "—"}
+      </p>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <tr className="border-t border-(--border)">
+      <td className="py-1.5 pr-3 text-(--text-secondary)">{label}</td>
+      <td className="py-1.5 pr-3 font-medium tabular-nums text-(--text-primary)">{value}</td>
+    </tr>
   );
 }

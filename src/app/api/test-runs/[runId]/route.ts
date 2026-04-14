@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ runId: string }> }
 ) {
   const { runId } = await params;
-  const supabase = await createClient();
+  const supabase = await createServerClient();
 
   const { data: run, error } = await supabase
     .from("test_runs")
@@ -26,13 +31,23 @@ export async function PATCH(
   { params }: { params: Promise<{ runId: string }> }
 ) {
   const { runId } = await params;
-  const supabase = await createClient();
 
   // Verify worker secret
   const secret = request.headers.get("x-worker-secret");
   if (secret !== process.env.WORKER_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (!url || !serviceKey) {
+    return NextResponse.json(
+      { error: "Server configuration missing" },
+      { status: 500 }
+    );
+  }
+
+  const supabase = createClient<Database>(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 
   const body = await request.json();
   const { case_runs, ...runUpdates } = body;
