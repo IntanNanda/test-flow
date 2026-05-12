@@ -15,9 +15,9 @@ interface TopBarProps {
 export function TopBar({ profile, title }: TopBarProps) {
   const { theme, setTheme } = useTheme();
   const router = useRouter();
-  const supabase = createClient();
 
   async function handleSignOut() {
+    const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();

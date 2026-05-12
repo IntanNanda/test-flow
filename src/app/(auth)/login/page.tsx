@@ -23,7 +23,6 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get("next") ?? "/dashboard";
-  const supabase = createClient();
 
   const {
     register,
@@ -32,6 +31,7 @@ function LoginForm() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   async function onSubmit(data: FormData) {
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email: data.email,
       password: data.password,
