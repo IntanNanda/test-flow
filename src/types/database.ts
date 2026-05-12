@@ -78,6 +78,25 @@ export type LighthouseConfig = {
   updated_at: string;
 };
 
+export type ApiTestConfig = {
+  id: string;
+  test_case_id: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+  endpoint_path: string;
+  headers: Json;
+  request_body: Json | null;
+  auth_type: "none" | "bearer" | "basic" | "api_key" | null;
+  auth_config: Json | null;
+  concurrency: number;
+  request_count: number;
+  threshold_p50_ms: number;
+  threshold_p95_ms: number;
+  threshold_p99_ms: number;
+  threshold_error_rate: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type LighthouseResult = {
   id: string;
   case_run_id: string;
@@ -430,6 +449,26 @@ export type Database = {
         Row: PerformanceHistory;
         Insert: Omit<PerformanceHistory, "id" | "created_at">;
         Update: Partial<Omit<PerformanceHistory, "id" | "created_at">>;
+        Relationships: [];
+      };
+      api_test_configs: {
+        Row: ApiTestConfig;
+        Insert: {
+          test_case_id: string;
+          method: ApiTestConfig["method"];
+          endpoint_path: string;
+          headers?: Json;
+          request_body?: Json | null;
+          auth_type?: ApiTestConfig["auth_type"];
+          auth_config?: Json | null;
+          concurrency?: number;
+          request_count?: number;
+          threshold_p50_ms?: number;
+          threshold_p95_ms?: number;
+          threshold_p99_ms?: number;
+          threshold_error_rate?: number;
+        };
+        Update: Partial<Omit<ApiTestConfig, "id" | "created_at" | "updated_at">>;
         Relationships: [];
       };
       lighthouse_configs: {

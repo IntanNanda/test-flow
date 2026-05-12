@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import type { Database, Json } from "@/types/database";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -57,43 +58,42 @@ export async function upsertApiConfig(
   }
 
   // Parse JSON fields
-  let headers: Record<string, string> = {};
-  let request_body: Record<string, unknown> | null = null;
-  let auth_config: Record<string, unknown> | null = null;
+  let headers: Json = {};
+  let request_body: Json | null = null;
+  let auth_config: Json | null = null;
 
   if (result.data.headers?.trim()) {
-    try { headers = JSON.parse(result.data.headers); }
+    try { headers = JSON.parse(result.data.headers) as Json; }
     catch { return { errors: { headers: ["Must be valid JSON"] } }; }
   }
   if (result.data.request_body?.trim()) {
-    try { request_body = JSON.parse(result.data.request_body); }
+    try { request_body = JSON.parse(result.data.request_body) as Json; }
     catch { return { errors: { request_body: ["Must be valid JSON"] } }; }
   }
   if (result.data.auth_config?.trim()) {
-    try { auth_config = JSON.parse(result.data.auth_config); }
+    try { auth_config = JSON.parse(result.data.auth_config) as Json; }
     catch { return { errors: { auth_config: ["Must be valid JSON"] } }; }
   }
 
+  const payload: Database["public"]["Tables"]["api_test_configs"]["Insert"] = {
+    test_case_id: testCaseId,
+    method: result.data.method,
+    endpoint_path: result.data.endpoint_path,
+    headers,
+    request_body,
+    auth_type: result.data.auth_type,
+    auth_config,
+    concurrency: result.data.concurrency,
+    request_count: result.data.request_count,
+    threshold_p50_ms: result.data.threshold_p50_ms,
+    threshold_p95_ms: result.data.threshold_p95_ms,
+    threshold_p99_ms: result.data.threshold_p99_ms,
+    threshold_error_rate: result.data.threshold_error_rate,
+  };
+
   const { error } = await supabase
     .from("api_test_configs")
-    .upsert(
-      {
-        test_case_id: testCaseId,
-        method: result.data.method,
-        endpoint_path: result.data.endpoint_path,
-        headers,
-        request_body,
-        auth_type: result.data.auth_type,
-        auth_config,
-        concurrency: result.data.concurrency,
-        request_count: result.data.request_count,
-        threshold_p50_ms: result.data.threshold_p50_ms,
-        threshold_p95_ms: result.data.threshold_p95_ms,
-        threshold_p99_ms: result.data.threshold_p99_ms,
-        threshold_error_rate: result.data.threshold_error_rate,
-      },
-      { onConflict: "test_case_id" }
-    );
+    .upsert(payload, { onConflict: "test_case_id" });
 
   if (error) return { message: error.message };
 
