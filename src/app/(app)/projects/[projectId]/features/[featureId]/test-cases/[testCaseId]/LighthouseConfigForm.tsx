@@ -27,6 +27,9 @@ export function LighthouseConfigForm({
     {}
   );
 
+  const hello = 'test'
+  console.log('hehehe', hello);
+
   return (
     <Card>
       <CardHeader>
