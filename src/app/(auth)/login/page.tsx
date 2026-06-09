@@ -32,10 +32,20 @@ function LoginForm() {
 
   async function onSubmit(data: FormData) {
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
+    let error: Error | null = null;
+
+    try {
+      const result = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+      error = result.error;
+    } catch {
+      toast.error(
+        "Could not reach Supabase. Check NEXT_PUBLIC_SUPABASE_URL in .env."
+      );
+      return;
+    }
 
     if (error) {
       toast.error(error.message);

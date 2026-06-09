@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { addStep, removeStep } from "@/app/actions/test-steps";
-import { Plus, Trash2, ChevronUp, ChevronDown, Camera } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { addStep, removeStep, updateStep } from "@/app/actions/test-steps";
+import { Plus, Trash2, Camera, Pencil, X } from "lucide-react";
 import type { TestStep } from "@/types/database";
 
 const ACTION_OPTIONS = [
@@ -60,6 +61,153 @@ interface StepBuilderProps {
   initialSteps: TestStep[];
 }
 
+function StepEditModal({
+  step,
+  testCaseId,
+  featureId,
+  projectId,
+  onClose,
+}: {
+  step: TestStep;
+  testCaseId: string;
+  featureId: string;
+  projectId: string;
+  onClose: () => void;
+}) {
+  const [action, setAction] = useState(step.action);
+  const [selector, setSelector] = useState(step.selector ?? "");
+  const [value, setValue] = useState(step.value ?? "");
+  const [description, setDescription] = useState(step.description ?? "");
+  const [screenshotOnStep, setScreenshotOnStep] = useState(step.screenshot_on_step);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const needsSelector = !["wait", "assert_url", "screenshot"].includes(action);
+  const needsValue = !["click", "check", "uncheck", "assert_visible", "navigate"].includes(action);
+
+  function handleSave() {
+    const formData = new FormData();
+    formData.set("action", action);
+    formData.set("selector", selector.trim());
+    formData.set("value", value.trim());
+    formData.set("description", description.trim());
+    if (screenshotOnStep) formData.set("screenshot_on_step", "true");
+
+    startTransition(async () => {
+      const result = await updateStep(step.id, testCaseId, featureId, projectId, formData);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Step updated");
+      router.refresh();
+      onClose();
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="edit-step-title">
+      <div className="absolute inset-0 bg-[#0A1B3D]/30 backdrop-blur-sm" onClick={() => { if (!isPending) onClose(); }} />
+      <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl dark:bg-[#1C1917]">
+        <div className="flex items-center justify-between border-b border-[#E7E5E4] px-6 py-4 dark:border-[#292524]">
+          <h2 id="edit-step-title" className="text-sm font-semibold text-[var(--text-primary)]">Edit step</h2>
+          <button
+            type="button"
+            onClick={() => { if (!isPending) onClose(); }}
+            disabled={isPending}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition-colors hover:bg-[#F5F5F4] hover:text-[var(--text-primary)] disabled:opacity-50 dark:hover:bg-[#292524]"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-step-action" className="text-xs font-semibold text-[var(--text-primary)]">
+                Action
+              </label>
+              <select
+                id="edit-step-action"
+                value={action}
+                onChange={(event) => setAction(event.target.value)}
+                className="h-9 rounded border border-[#E7E5E4] bg-white px-2 text-sm dark:border-[#292524] dark:bg-[#1C1917] dark:text-[#FAFAF9]"
+              >
+                {ACTION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {needsSelector && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="edit-step-selector" className="text-xs font-semibold text-[var(--text-primary)]">
+                  Selector / URL
+                </label>
+                <input
+                  id="edit-step-selector"
+                  value={selector}
+                  onChange={(event) => setSelector(event.target.value)}
+                  placeholder={SELECTOR_PLACEHOLDER[action]}
+                  className="h-9 rounded border border-[#E7E5E4] bg-white px-2 font-mono text-xs dark:border-[#292524] dark:bg-[#1C1917] dark:text-[#FAFAF9]"
+                />
+              </div>
+            )}
+
+            {needsValue && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="edit-step-value" className="text-xs font-semibold text-[var(--text-primary)]">
+                  Value
+                </label>
+                <input
+                  id="edit-step-value"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  placeholder={VALUE_PLACEHOLDER[action]}
+                  className="h-9 rounded border border-[#E7E5E4] bg-white px-2 text-sm dark:border-[#292524] dark:bg-[#1C1917] dark:text-[#FAFAF9]"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="edit-step-description" className="text-xs font-semibold text-[var(--text-primary)]">
+              Description
+            </label>
+            <input
+              id="edit-step-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="h-9 rounded border border-[#E7E5E4] bg-white px-2 text-sm dark:border-[#292524] dark:bg-[#1C1917] dark:text-[#FAFAF9]"
+            />
+          </div>
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <input
+              type="checkbox"
+              checked={screenshotOnStep}
+              onChange={(event) => setScreenshotOnStep(event.target.checked)}
+              className="h-4 w-4 rounded border-[#E7E5E4] text-[#1E40AF]"
+            />
+            <Camera className="h-3.5 w-3.5 text-[var(--text-muted)]" aria-hidden="true" />
+            Take screenshot after this step
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-[#E7E5E4] px-6 py-4 dark:border-[#292524]">
+          <Button type="button" variant="secondary" size="sm" onClick={() => onClose()} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button type="button" size="sm" onClick={handleSave} loading={isPending}>
+            Save step
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StepBuilder({
   testCaseId,
   featureId,
@@ -68,7 +216,9 @@ export function StepBuilder({
 }: StepBuilderProps) {
   const [showForm, setShowForm] = useState(false);
   const [selectedAction, setSelectedAction] = useState("navigate");
+  const [editTarget, setEditTarget] = useState<TestStep | null>(null);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function handleAddStep(formData: FormData) {
     startTransition(async () => {
@@ -80,7 +230,13 @@ export function StepBuilder({
 
   function handleRemoveStep(stepId: string) {
     startTransition(async () => {
-      await removeStep(stepId, testCaseId, featureId, projectId);
+      const result = await removeStep(stepId, testCaseId, featureId, projectId);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Step deleted");
+      router.refresh();
     });
   }
 
@@ -149,14 +305,26 @@ export function StepBuilder({
                     </span>
                   )}
                 </div>
-                <button
-                  onClick={() => handleRemoveStep(step.id)}
-                  disabled={isPending}
-                  aria-label={`Remove step ${index + 1}`}
-                  className="shrink-0 rounded p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[#FEE2E2] hover:text-[#B91C1C] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
-                >
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditTarget(step)}
+                    disabled={isPending}
+                    aria-label={`Edit step ${index + 1}`}
+                    className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[#DBEAFE] hover:text-[#1E40AF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] disabled:opacity-50"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveStep(step.id)}
+                    disabled={isPending}
+                    aria-label={`Remove step ${index + 1}`}
+                    className="rounded p-1 text-[var(--text-muted)] transition-colors hover:bg-[#FEE2E2] hover:text-[#B91C1C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
               </li>
             ))}
           </ol>
@@ -284,6 +452,15 @@ export function StepBuilder({
           </Button>
         )}
       </CardContent>
+      {editTarget && (
+        <StepEditModal
+          step={editTarget}
+          testCaseId={testCaseId}
+          featureId={featureId}
+          projectId={projectId}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
     </Card>
   );
 }

@@ -43,13 +43,23 @@ export default function SignupPage() {
 
   async function onSubmit(data: FormData) {
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { display_name: data.displayName },
-      },
-    });
+    let error: Error | null = null;
+
+    try {
+      const result = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: { display_name: data.displayName },
+        },
+      });
+      error = result.error;
+    } catch {
+      toast.error(
+        "Could not reach Supabase. Check NEXT_PUBLIC_SUPABASE_URL in .env."
+      );
+      return;
+    }
 
     if (error) {
       toast.error(error.message);

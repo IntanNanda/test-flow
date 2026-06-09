@@ -19,6 +19,7 @@ const FILTERS = [
   { label: "Passed",  value: "passed"  },
   { label: "Failed",  value: "failed"  },
   { label: "Errored", value: "error"   },
+  { label: "Running", value: "running" },
   { label: "Skipped", value: "skipped" },
   { label: "Pending", value: "pending" },
 ] as const;
