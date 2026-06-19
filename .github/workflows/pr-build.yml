@@ -7,8 +7,8 @@ on:
       - main
 
 jobs:
-  sonarcloud:
-    name: SonarCloud Scan
+  sonar-scan:
+    name: Sonar Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -26,20 +26,64 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: SonarCloud Scan
-        uses: sonarsource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sonar Scanner
+        run: |
+          npx sonar-scanner \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+        # Using sonar-scanner CLI directly — no PR decoration, no GitHub annotation
+        # Mirrors SonarQube Community Edition behavior (no GITHUB_TOKEN passed)
 
-      - name: SonarCloud Quality Gate check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
+      - name: Check quality gate and filter PR files
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
-        continue-on-error: true
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+        run: |
+          # Get files changed in this PR
+          PR_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(ts|tsx|js|jsx)$' || true)
+
+          if [ -z "$PR_FILES" ]; then
+            echo "No JS/TS files changed. Skipping."
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$PR_FILES"
+
+          # Wait for Sonar analysis to complete
+          echo "Waiting for Sonar analysis..."
+          for i in $(seq 1 12); do
+            STATUS=$(curl -sf -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
+            if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "WARN" ]; then
+              break
+            fi
+            echo "Status: $STATUS — retrying ($i/12)..."
+            sleep 10
+          done
+
+          # Get issues for changed files only
+          FOUND_ISSUES=0
+          while IFS= read -r FILE; do
+            ISSUES=$(curl -sf -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST_URL/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&files=$FILE&resolved=false&types=BUG,VULNERABILITY,CODE_SMELL&ps=1" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])")
+            if [ "$ISSUES" -gt 0 ]; then
+              echo "FAIL: $FILE has $ISSUES issue(s)"
+              FOUND_ISSUES=1
+            else
+              echo "OK: $FILE"
+            fi
+          done <<< "$PR_FILES"
+
+          if [ "$FOUND_ISSUES" -eq 1 ]; then
+            echo "Quality gate failed — issues found in PR files."
+            exit 1
+          fi
+
+          echo "Quality gate passed."
 
   build:
     name: Build
