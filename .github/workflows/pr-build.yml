@@ -40,7 +40,6 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
           SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
         run: |
-          # Get files changed in this PR
           PR_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(ts|tsx|js|jsx)$' || true)
 
           if [ -z "$PR_FILES" ]; then
@@ -48,15 +47,16 @@ jobs:
             exit 0
           fi
 
-          echo "Changed files:"
+          echo "=== Changed files ==="
           echo "$PR_FILES"
+          echo ""
 
-          # Wait for Sonar analysis to complete
+          # Wait for Sonar analysis to finish
           echo "Waiting for Sonar analysis..."
           for i in $(seq 1 12); do
-            STATUS=$(curl -sf -u "$SONAR_TOKEN:" \
-              "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
-              | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
+            QG_RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST_URL/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY")
+            STATUS=$(echo "$QG_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['projectStatus']['status'])")
             if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ] || [ "$STATUS" = "WARN" ]; then
               break
             fi
@@ -64,26 +64,81 @@ jobs:
             sleep 10
           done
 
-          # Get issues for changed files only
+          # Print quality gate conditions detail
+          echo ""
+          echo "=== Quality Gate: $STATUS ==="
+          echo "$QG_RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          conditions = d['projectStatus'].get('conditions', [])
+          for c in conditions:
+              icon = '✅' if c['status'] == 'OK' else '❌'
+              print(f\"{icon} {c['metricKey']}: {c.get('actualValue','?')} (threshold: {c.get('errorThreshold','?')}) — {c['status']}\")
+          "
+          echo ""
+
+          # Check issues per changed file (BUG, VULNERABILITY, CODE_SMELL)
+          echo "=== Issues by file ==="
           FOUND_ISSUES=0
           while IFS= read -r FILE; do
-            ISSUES=$(curl -sf -u "$SONAR_TOKEN:" \
-              "$SONAR_HOST_URL/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&files=$FILE&resolved=false&types=BUG,VULNERABILITY,CODE_SMELL&ps=1" \
-              | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])")
-            if [ "$ISSUES" -gt 0 ]; then
-              echo "FAIL: $FILE has $ISSUES issue(s)"
+            RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST_URL/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&files=$FILE&resolved=false&types=BUG,VULNERABILITY,CODE_SMELL&ps=50&additionalFields=rules")
+            TOTAL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['total'])")
+
+            if [ "$TOTAL" -gt 0 ]; then
+              echo "❌ $FILE — $TOTAL issue(s):"
+              echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          for issue in d['issues']:
+              line = issue.get('line', '?')
+              severity = issue.get('severity', '?')
+              rule = issue.get('rule', '?')
+              msg = issue.get('message', '?')
+              itype = issue.get('type', '?')
+              print(f'   [{severity}] {itype} | line {line} | {rule}')
+              print(f'   → {msg}')
+          "
               FOUND_ISSUES=1
             else
-              echo "OK: $FILE"
+              echo "✅ $FILE — no issues"
             fi
           done <<< "$PR_FILES"
 
+          # Check security hotspots per changed file (separate API)
+          echo ""
+          echo "=== Security Hotspots ==="
+          while IFS= read -r FILE; do
+            HS_RESPONSE=$(curl -sf -u "$SONAR_TOKEN:" \
+              "$SONAR_HOST_URL/api/hotspots/search?projectKey=$SONAR_PROJECT_KEY&files=$FILE&status=TO_REVIEW&ps=50")
+            HS_TOTAL=$(echo "$HS_RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('paging',{}).get('total',0))")
+
+            if [ "$HS_TOTAL" -gt 0 ]; then
+              echo "🔴 $FILE — $HS_TOTAL hotspot(s):"
+              echo "$HS_RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          for h in d.get('hotspots', []):
+              line = h.get('line', '?')
+              vuln = h.get('vulnerabilityProbability', '?')
+              rule = h.get('ruleKey', '?')
+              msg = h.get('message', '?')
+              print(f'   [HOTSPOT/{vuln}] line {line} | {rule}')
+              print(f'   → {msg}')
+          "
+              FOUND_ISSUES=1
+            else
+              echo "✅ $FILE — no hotspots"
+            fi
+          done <<< "$PR_FILES"
+
+          echo ""
           if [ "$FOUND_ISSUES" -eq 1 ]; then
-            echo "Quality gate failed — issues found in PR files."
+            echo "❌ Quality gate failed — fix issues above before merging."
             exit 1
           fi
 
-          echo "Quality gate passed."
+          echo "✅ Quality gate passed. Safe to merge."
 
   build:
     name: Build
