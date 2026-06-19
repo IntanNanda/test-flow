@@ -87,18 +87,43 @@ jobs:
 
             if [ "$TOTAL" -gt 0 ]; then
               echo "❌ $FILE — $TOTAL issue(s):"
-              echo "$RESPONSE" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          for issue in d['issues']:
-              line = issue.get('line', '?')
-              severity = issue.get('severity', '?')
-              rule = issue.get('rule', '?')
-              msg = issue.get('message', '?')
-              itype = issue.get('type', '?')
-              print(f'   [{severity}] {itype} | line {line} | {rule}')
-              print(f'   → {msg}')
-          "
+              echo "$RESPONSE" | FILE="$FILE" python3 -c "
+import sys, json, os
+
+d = json.load(sys.stdin)
+filepath = os.environ.get('FILE', '')
+
+# Read source file for code snippets
+source_lines = []
+try:
+    with open(filepath, 'r') as f:
+        source_lines = f.readlines()
+except Exception:
+    pass
+
+for issue in d['issues']:
+    line = issue.get('line')
+    severity = issue.get('severity', '?')
+    rule = issue.get('rule', '?')
+    msg = issue.get('message', '?')
+    itype = issue.get('type', '?')
+    text_range = issue.get('textRange', {})
+    start_line = text_range.get('startLine', line)
+    end_line = text_range.get('endLine', line)
+
+    print(f'')
+    print(f'   [{severity}] {itype} — {rule}')
+    print(f'   Message : {msg}')
+    print(f'   Location: {filepath}:{line}')
+
+    if source_lines and line:
+        snippet_start = max(0, (start_line or line) - 3)
+        snippet_end = min(len(source_lines), (end_line or line) + 2)
+        print(f'   Code snippet:')
+        for i, src_line in enumerate(source_lines[snippet_start:snippet_end], start=snippet_start + 1):
+            marker = '>>>' if (start_line and end_line and start_line <= i <= end_line) or i == line else '   '
+            print(f'   {marker} {i:4d} | {src_line}', end='' if src_line.endswith('\n') else '\n')
+"
               FOUND_ISSUES=1
             else
               echo "✅ $FILE — no issues"
@@ -115,17 +140,41 @@ jobs:
 
             if [ "$HS_TOTAL" -gt 0 ]; then
               echo "🔴 $FILE — $HS_TOTAL hotspot(s):"
-              echo "$HS_RESPONSE" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          for h in d.get('hotspots', []):
-              line = h.get('line', '?')
-              vuln = h.get('vulnerabilityProbability', '?')
-              rule = h.get('ruleKey', '?')
-              msg = h.get('message', '?')
-              print(f'   [HOTSPOT/{vuln}] line {line} | {rule}')
-              print(f'   → {msg}')
-          "
+              echo "$HS_RESPONSE" | FILE="$FILE" python3 -c "
+import sys, json, os
+
+d = json.load(sys.stdin)
+filepath = os.environ.get('FILE', '')
+
+source_lines = []
+try:
+    with open(filepath, 'r') as f:
+        source_lines = f.readlines()
+except Exception:
+    pass
+
+for h in d.get('hotspots', []):
+    line = h.get('line')
+    vuln = h.get('vulnerabilityProbability', '?')
+    rule = h.get('ruleKey', '?')
+    msg = h.get('message', '?')
+    text_range = h.get('textRange', {})
+    start_line = text_range.get('startLine', line)
+    end_line = text_range.get('endLine', line)
+
+    print(f'')
+    print(f'   [HOTSPOT/{vuln}] — {rule}')
+    print(f'   Message : {msg}')
+    print(f'   Location: {filepath}:{line}')
+
+    if source_lines and line:
+        snippet_start = max(0, (start_line or line) - 3)
+        snippet_end = min(len(source_lines), (end_line or line) + 2)
+        print(f'   Code snippet:')
+        for i, src_line in enumerate(source_lines[snippet_start:snippet_end], start=snippet_start + 1):
+            marker = '>>>' if (start_line and end_line and start_line <= i <= end_line) or i == line else '   '
+            print(f'   {marker} {i:4d} | {src_line}', end='' if src_line.endswith('\n') else '\n')
+"
               FOUND_ISSUES=1
             else
               echo "✅ $FILE — no hotspots"
