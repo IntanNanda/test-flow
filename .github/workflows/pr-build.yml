@@ -8,7 +8,7 @@ on:
 
 jobs:
   sonarcloud:
-    name: SonarQube Scan
+    name: SonarCloud Scan
     runs-on: ubuntu-latest
 
     steps:
@@ -29,16 +29,19 @@ jobs:
       - name: Run tests with coverage
         run: npm run test:coverage
 
-      - name: SonarQube Scan
+      - name: SonarCloud Scan
         uses: sonarsource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: SonarQube Quality Gate check
+      - name: SonarCloud Quality Gate check
         uses: sonarsource/sonarqube-quality-gate-action@master
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         continue-on-error: true
 
   build:
