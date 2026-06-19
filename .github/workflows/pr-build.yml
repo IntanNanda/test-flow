@@ -27,10 +27,12 @@ jobs:
         run: npm ci
 
       - name: Sonar Scanner
-        uses: sonarsource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          npx sonar-scanner \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+        # Using sonar-scanner CLI directly — no PR decoration, no GitHub annotation
+        # Mirrors SonarQube Community Edition behavior (no GITHUB_TOKEN passed)
 
       - name: Check quality gate and filter PR files
         env:
