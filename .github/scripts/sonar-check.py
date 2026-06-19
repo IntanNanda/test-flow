@@ -82,9 +82,10 @@ def main():
 
     print("=== Issues by file ===")
     for filepath in pr_files:
+        component_key = f"{SONAR_PROJECT_KEY}:{filepath}"
         data = sonar_get(
-            f"/api/issues/search?componentKeys={SONAR_PROJECT_KEY}"
-            f"&files={filepath}&resolved=false"
+            f"/api/issues/search?componentKeys={component_key}"
+            f"&resolved=false"
             f"&types=BUG,VULNERABILITY,CODE_SMELL&ps=50"
         )
         total = data.get("total", 0)
