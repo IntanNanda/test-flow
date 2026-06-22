@@ -34,7 +34,6 @@ type FormData = z.infer<typeof schema>;
 
 export default function SignupPage() {
   const router = useRouter();
-  const supabase = createClient();
 
   const {
     register,
@@ -43,13 +42,24 @@ export default function SignupPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   async function onSubmit(data: FormData) {
-    const { error } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: { display_name: data.displayName },
-      },
-    });
+    const supabase = createClient();
+    let error: Error | null = null;
+
+    try {
+      const result = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: { display_name: data.displayName },
+        },
+      });
+      error = result.error;
+    } catch {
+      toast.error(
+        "Could not reach Supabase. Check NEXT_PUBLIC_SUPABASE_URL in .env."
+      );
+      return;
+    }
 
     if (error) {
       toast.error(error.message);

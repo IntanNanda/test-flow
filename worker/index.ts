@@ -114,7 +114,7 @@ async function processRun(runId: string) {
     projects: { base_url: string | null } | null;
   };
 
-  const baseUrl = runData.projects?.base_url ?? null;
+  const baseUrl = runData.base_url_override ?? runData.projects?.base_url ?? null;
   const caseRuns = runData.test_case_runs ?? [];
 
   const patchCaseRuns: Array<Record<string, unknown> & { id: string; test_case_id?: string; status?: string }> =
@@ -134,6 +134,7 @@ async function processRun(runId: string) {
         id: caseRun.id,
         status: "skipped",
         error_message: "Test case data missing",
+        completed_at: new Date().toISOString(),
       });
       continue;
     }
@@ -168,6 +169,7 @@ async function processRun(runId: string) {
           screenshot_urls: result.screenshot_urls,
           video_url: result.video_url ?? null,
           console_log: result.console_log ?? null,
+          completed_at: new Date().toISOString(),
         });
 
         if (result.status === "passed") passed++;
@@ -182,6 +184,7 @@ async function processRun(runId: string) {
             test_case_id: testCase.id,
             status: "skipped",
             error_message: "Lighthouse configuration missing",
+            completed_at: new Date().toISOString(),
           });
           continue;
         }
@@ -210,6 +213,7 @@ async function processRun(runId: string) {
           duration_ms: result.duration_ms,
           error_message: result.error_message ?? null,
           error_stack: result.error_stack ?? null,
+          completed_at: new Date().toISOString(),
         });
 
         if (result.status === "passed") passed++;
@@ -224,6 +228,7 @@ async function processRun(runId: string) {
           test_case_id: testCase.id,
           status: "skipped",
           error_message: "Test type not yet supported by worker",
+          completed_at: new Date().toISOString(),
         });
       }
     } catch (runnerErr) {
@@ -235,6 +240,7 @@ async function processRun(runId: string) {
         test_case_id: testCase.id,
         status: "error",
         error_message: msg,
+        completed_at: new Date().toISOString(),
       });
     }
 

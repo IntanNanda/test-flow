@@ -4,6 +4,25 @@ import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const { pathname } = request.nextUrl;
+
+  const publicRoutes = ["/login", "/signup", "/invite"];
+  const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
+
+  if (isPublicRoute) {
+    return supabaseResponse;
+  }
+
+  const hasSupabaseAuthCookie = request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-") && name.includes("-auth-token"));
+
+  if (!hasSupabaseAuthCookie) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
+  }
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,16 +45,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session — must not use supabase.auth.getSession()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-
-  // Public routes that don't need auth
-  const publicRoutes = ["/login", "/signup", "/invite"];
-  const isPublicRoute = publicRoutes.some((r) => pathname.startsWith(r));
+  let user = null;
+  try {
+    // Refresh session — must not use supabase.auth.getSession()
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch {
+    user = null;
+  }
 
   // Redirect unauthenticated users to login
   if (!user && !isPublicRoute) {

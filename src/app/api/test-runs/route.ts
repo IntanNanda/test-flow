@@ -4,9 +4,9 @@ import { z } from "zod";
 
 const schema = z.object({
   project_id: z.string().uuid(),
-  name: z.string().optional(),
+  name: z.string().nullable().optional(),
   environment: z.string().default("production"),
-  base_url_override: z.string().url().optional(),
+  base_url_override: z.string().url().nullable().optional(),
   test_case_ids: z.array(z.string().uuid()).optional(),
 });
 

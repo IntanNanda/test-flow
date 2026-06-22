@@ -9,6 +9,7 @@ import { ManageRunCases } from "./ManageRunCases";
 import { CaseRunTable } from "./CaseRunTable";
 import { RunHeaderActions } from "./RunHeaderActions";
 import { RunNameEdit } from "./RunNameEdit";
+import { RunLiveRefresh } from "./RunLiveRefresh";
 import type { RunStatus } from "@/types/database";
 
 export async function generateMetadata({
@@ -120,6 +121,7 @@ export default async function RunDetailPage({
 
   return (
     <div className="min-h-screen bg-[#EEF2F7]">
+      <RunLiveRefresh runId={runId} status={run.status as RunStatus} />
       <div className="mx-auto max-w-350 px-6 py-6">
 
         {/* Breadcrumb */}
@@ -248,4 +250,3 @@ export default async function RunDetailPage({
     </div>
   );
 }
-

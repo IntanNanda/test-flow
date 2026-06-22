@@ -51,17 +51,58 @@ export async function removeStep(
   testCaseId: string,
   featureId: string,
   projectId: string
-) {
+): Promise<{ error?: string }> {
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("test_steps")
     .delete()
-    .eq("id", stepId);
+    .eq("id", stepId)
+    .eq("test_case_id", testCaseId);
 
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   revalidatePath(`/projects/${projectId}/features/${featureId}/test-cases/${testCaseId}`);
+  return {};
+}
+
+export async function updateStep(
+  stepId: string,
+  testCaseId: string,
+  featureId: string,
+  projectId: string,
+  formData: FormData
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+
+  const result = stepSchema.safeParse({
+    action: formData.get("action") as string,
+    selector: (formData.get("selector") as string) || undefined,
+    value: (formData.get("value") as string) || undefined,
+    description: (formData.get("description") as string) || undefined,
+    screenshot_on_step: formData.get("screenshot_on_step") === "true",
+  });
+
+  if (!result.success) {
+    return { error: result.error.flatten().fieldErrors.action?.[0] ?? "Invalid step" };
+  }
+
+  const { error } = await supabase
+    .from("test_steps")
+    .update({
+      action: result.data.action,
+      selector: result.data.selector ?? null,
+      value: result.data.value ?? null,
+      description: result.data.description ?? null,
+      screenshot_on_step: result.data.screenshot_on_step,
+    })
+    .eq("id", stepId)
+    .eq("test_case_id", testCaseId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/projects/${projectId}/features/${featureId}/test-cases/${testCaseId}`);
+  return {};
 }
 
 export async function reorderSteps(

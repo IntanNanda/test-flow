@@ -5,7 +5,7 @@ import {
   ChevronDown, Clock, CheckCircle2, XCircle,
   Image as ImageIcon, Terminal, FileJson,
 } from "lucide-react";
-import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatusBadge, type StatusValue } from "@/components/ui/StatusBadge";
 import { formatDuration } from "@/lib/utils";
 import type { LighthouseResult } from "@/types/database";
 
@@ -54,7 +54,7 @@ export function CaseRunRow({
           <p className="truncate text-sm font-medium text-[#0A1B3D]">{testCaseTitle}</p>
         </td>
         <td className="px-4 py-4">
-          <StatusBadge status={caseRun.status as "passed" | "failed" | "pending"} size="sm" />
+          <StatusBadge status={caseRun.status as StatusValue} size="sm" />
         </td>
         <td className="px-4 py-4 text-xs text-[#6B7A99]">
           {testCaseFeature ?? <span className="text-[#C4CDDE]">—</span>}
